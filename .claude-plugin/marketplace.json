@@ -1,5 +1,8 @@
 {
   "name": "tanguc",
+  "metadata": {
+    "description": "Personal Claude Code plugin marketplace by Sergen Tanguc. Opinionated DevOps and infrastructure tooling for the Claude Code ecosystem."
+  },
   "owner": {
     "name": "Sergen Tanguc",
     "url": "https://sergentanguc.com"
