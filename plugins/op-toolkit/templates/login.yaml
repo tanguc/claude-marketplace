@@ -1,0 +1,23 @@
+# op-toolkit template: login (web app credentials with MFA recovery)
+# usage: op-item-new.sh login.yaml
+# customize then run, or copy to your own template path
+
+title: "GitHub Personal Account - stanguc"
+category: login
+vault: Personal
+url: https://github.com/login
+username: stanguc@example.com
+password: generate
+
+sections:
+  Recovery:
+    backup codes: replace-with-actual-backup-codes
+    recovery email: recovery@example.com
+    authenticator app: "Authy / TOTP"
+
+notes: |
+  Purpose: personal GitHub account used for open source contributions and personal projects.
+  Access: web UI at https://github.com and git operations via SSH key (see "SSH Keys - GitHub" item).
+  MFA: TOTP via Authy. Backup codes stored in "backup codes" field above -- regenerate after use.
+  Rotation: rotate password every 12 months or immediately on suspected compromise.
+  Related: "GitHub SSH Key - Personal Laptop", "GitHub Fine-Grained Token - CI"

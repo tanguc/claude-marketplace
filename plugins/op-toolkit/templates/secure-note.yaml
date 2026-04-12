@@ -1,0 +1,39 @@
+# op-toolkit template: secure-note (unstructured secret material such as GPG recovery phrases)
+# usage: op-item-new.sh secure-note.yaml
+# customize then run, or copy to your own template path
+
+title: "GPG Master Key - Backup Recovery Phrase (stanguc@example.com)"
+category: secure-note
+vault: Personal
+
+sections:
+  Identity:
+    key id: "0xABCD1234EFGH5678"
+    fingerprint: "ABCD 1234 EFGH 5678 IJKL  MNOP QRST UVWX YZ01 2345"
+    algorithm: "RSA 4096"
+    created: "2026-04-12"
+    expires: never
+    uid: "Sergen Tanguc <stanguc@example.com>"
+
+  Key Files:
+    public key export: "gpg --armor --export stanguc@example.com"
+    revocation cert: "stored offline on encrypted USB, location: home safe"
+    subkeys: "sign (0xSUBKEY01), encrypt (0xSUBKEY02) -- see subkeys item"
+
+notes: |
+  Purpose: recovery phrase for the GPG master key used for git commit signing, age-encrypted
+  secrets, and SSH authentication via gpg-agent. Store this item in the Personal vault which
+  requires biometric unlock; do NOT move to Infrastructure vault.
+
+  Recovery phrase (BIP-39 style -- 24 words):
+  word1 word2 word3 word4 word5 word6
+  word7 word8 word9 word10 word11 word12
+  word13 word14 word15 word16 word17 word18
+  word19 word20 word21 word22 word23 word24
+
+  Recovery steps: import the phrase into a fresh GnuPG keyring using your key management tool
+  (e.g., paperkey or the tool that generated this phrase). Do not type the phrase on an
+  internet-connected machine.
+  Rotation: GPG master keys do not rotate by design. If compromised, publish the revocation
+  cert stored on the offline USB, then generate a new key pair.
+  Related: "GPG Subkey - Sign (stanguc)", "GPG Subkey - Encrypt (stanguc)", "age Encryption Key"

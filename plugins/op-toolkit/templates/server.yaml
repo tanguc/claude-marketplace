@@ -1,0 +1,40 @@
+# op-toolkit template: server (SSH-accessible Linux host with network and hardware metadata)
+# usage: op-item-new.sh server.yaml
+# customize then run, or copy to your own template path
+
+title: "Generic Linux Server - Datacenter 1 (prod-web-01)"
+category: server
+vault: Infrastructure
+url: https://idrac.example.com
+username: root
+password: generate
+
+sections:
+  SSH:
+    host: 203.0.113.10
+    port: "22"
+    command: "ssh root@203.0.113.10"
+    key item: "SSH Key - prod-web-01 (op://Infrastructure/SSH Key - prod-web-01/private key)"
+
+  Network:
+    LAN IP: 192.168.1.10/24
+    WAN IP: 203.0.113.10/29
+    gateway: 192.168.1.1
+    DHCP range: "192.168.1.100 - 192.168.1.200"
+    hostname: prod-web-01.example.com
+    CF tunnel: https://prod-web-01.example.com
+
+  Hardware:
+    CPU: "Intel Xeon E-2234 (4c/8t)"
+    RAM: "32 GB DDR4 ECC"
+    disk: "2x 480 GB SSD RAID-1"
+    datacenter: "Datacenter 1, Rack 3, Unit 12"
+
+notes: |
+  Purpose: primary production web server. Runs Nginx reverse proxy and Node.js app containers.
+  Access: SSH only, password auth disabled -- use key from "SSH Key - prod-web-01" item. Root login
+  is permitted only from the management VLAN (192.168.1.0/24); blocked from WAN.
+  Rotation: rotate root password every 90 days. After rotation, update this item and notify the
+  on-call runbook at https://wiki.example.com/runbooks/prod-web-01.
+  Related: "SSH Key - prod-web-01", "Cloudflare Tunnel - prod-web-01", "Grafana Dashboard - prod"
+  Runbook: https://wiki.example.com/runbooks/prod-web-01

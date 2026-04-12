@@ -1,12 +1,12 @@
 #!/bin/bash
-# op-cache-clear.sh -- wipe the bulk cache
+# op-cache-clear.sh -- wipe the op-toolkit cache
 # usage:
-#   op-cache-clear.sh            # clear everything
+#   op-cache-clear.sh                          # clear everything
 #   op-cache-clear.sh Infrastructure Private   # clear specific vaults
 
 set -euo pipefail
 
-CACHE_DIR="${OP_BULK_CACHE_DIR:-/tmp/.op-bulk-cache-$(id -u)}"
+CACHE_DIR="${OP_TOOLKIT_CACHE_DIR:-/tmp/.op-toolkit-$(id -u)}"
 [ -d "$CACHE_DIR" ] || { echo "no cache to clear ($CACHE_DIR)"; exit 0; }
 
 if [ $# -eq 0 ]; then

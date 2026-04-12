@@ -9,14 +9,14 @@
   },
   "plugins": [
     {
-      "name": "op-bulk-cache",
-      "source": "./plugins/op-bulk-cache",
-      "description": "Fetch a whole 1Password vault in one biometric prompt, then read secrets instantly from a /tmp cache. Never trigger op biometric spam again.",
-      "version": "1.0.0",
+      "name": "op-toolkit",
+      "source": "./plugins/op-toolkit",
+      "description": "Full 1Password CLI toolkit for Claude Code: bulk-cache vaults so biometric prompts hit once per session, create items from YAML templates, look up secrets via op:// references with auto-refresh-on-miss.",
+      "version": "2.0.0",
       "author": {
         "name": "Sergen Tanguc"
       },
-      "tags": ["1password", "op", "secrets", "bash", "devops", "infrastructure"]
+      "tags": ["1password", "op", "secrets", "bash", "devops", "infrastructure", "yaml", "templates", "create"]
     }
   ]
 }

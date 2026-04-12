@@ -14,7 +14,7 @@ A Claude Code plugin marketplace by [Sergen Tanguc](https://sergentanguc.com).
 
 | Plugin | Description |
 |--------|-------------|
-| [`op-bulk-cache`](./plugins/op-bulk-cache) | Fetch a whole 1Password vault in one biometric prompt, then read secrets instantly from a `/tmp` cache. Kills `op` biometric spam inside Claude Code sessions. |
+| [`op-toolkit`](./plugins/op-toolkit) | Full 1Password CLI toolkit: bulk-cache vaults (one biometric prompt per session), read secrets via `op://` references, and create new items from YAML templates. Kills `op` biometric spam inside Claude Code sessions. |
 
 ## Contributing
 
