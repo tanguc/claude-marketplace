@@ -16,7 +16,7 @@ Dropping `--fields` is critical: with `--fields label=password`, any item missin
 
 ```shell
 # in Claude Code:
-/plugin marketplace add stanguc/tanguc-marketplace
+/plugin marketplace add tanguc/claude-marketplace
 /plugin install op-bulk-cache@tanguc
 ```
 

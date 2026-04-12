@@ -6,7 +6,7 @@ A Claude Code plugin marketplace by [Sergen Tanguc](https://sergentanguc.com).
 
 ```shell
 # in Claude Code:
-/plugin marketplace add stanguc/tanguc-marketplace
+/plugin marketplace add tanguc/claude-marketplace
 /plugin install <plugin-name>@tanguc
 ```
 

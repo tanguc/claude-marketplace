@@ -6,8 +6,8 @@
     "name": "Sergen Tanguc",
     "url": "https://sergentanguc.com"
   },
-  "homepage": "https://github.com/stanguc/tanguc-marketplace/tree/main/plugins/op-bulk-cache",
-  "repository": "https://github.com/stanguc/tanguc-marketplace",
+  "homepage": "https://github.com/tanguc/claude-marketplace/tree/main/plugins/op-bulk-cache",
+  "repository": "https://github.com/tanguc/claude-marketplace",
   "license": "MIT",
   "keywords": ["1password", "op", "secrets", "bash", "devops", "cache", "biometric"]
 }
