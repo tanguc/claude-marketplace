@@ -1,0 +1,13 @@
+{
+  "name": "op-bulk-cache",
+  "description": "Fetch a whole 1Password vault in one biometric prompt, then read secrets instantly from a /tmp cache.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Sergen Tanguc",
+    "url": "https://sergentanguc.com"
+  },
+  "homepage": "https://github.com/stanguc/tanguc-marketplace/tree/main/plugins/op-bulk-cache",
+  "repository": "https://github.com/stanguc/tanguc-marketplace",
+  "license": "MIT",
+  "keywords": ["1password", "op", "secrets", "bash", "devops", "cache", "biometric"]
+}
