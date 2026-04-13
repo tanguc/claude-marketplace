@@ -102,4 +102,4 @@ fields:
 - `op` 2.x signed in
 - `jq`
 - `yq` (for `op-item-new.sh` only)
-- Bash 4+ (macOS ships 3.2 — install via `brew install bash`)
+- Bash 3.2+ (scripts are compatible with the default macOS bash)
