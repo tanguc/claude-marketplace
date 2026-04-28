@@ -23,6 +23,8 @@
 #   OP_TOOLKIT_ALIAS_FILE       override alias file path
 #   OP_TOOLKIT_REFRESH_DEBOUNCE seconds before a missed lookup is allowed to refresh
 #                               (default: 30)
+#   OP_TOOLKIT_PREWARM_ALL      on cold cache, pre-warm all configured vaults
+#                               (default: 1; set to 0 to load only the requested vault)
 
 set -euo pipefail
 
@@ -115,7 +117,16 @@ CACHE_FILE="$CACHE_DIR/$safe.json"
 
 # bootstrap if missing, or force refresh
 if [ "$REFRESH_MODE" = "force" ] || [ ! -f "$CACHE_FILE" ]; then
-  "$LOADER" "$VAULT" >&2
+  # cold cache (no vault files at all) and not a force-refresh? pre-warm all
+  # configured vaults so subsequent cross-vault reads don't trigger more prompts.
+  # opt out with OP_TOOLKIT_PREWARM_ALL=0
+  prewarm="${OP_TOOLKIT_PREWARM_ALL:-1}"
+  if [ "$REFRESH_MODE" != "force" ] && [ "$prewarm" = "1" ] \
+     && ! ls "$CACHE_DIR"/*.json >/dev/null 2>&1; then
+    "$LOADER" >&2 || "$LOADER" "$VAULT" >&2
+  else
+    "$LOADER" "$VAULT" >&2
+  fi
 fi
 
 VALUE=$(lookup)
