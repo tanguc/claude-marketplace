@@ -1,7 +1,7 @@
 {
   "name": "op-toolkit",
   "description": "Full 1Password CLI toolkit for Claude Code: bulk-cache vaults so biometric prompts hit once per session, create items from YAML templates, look up secrets via op:// references with auto-refresh-on-miss.",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": {
     "name": "Sergen Tanguc",
     "url": "https://sergentanguc.com"
