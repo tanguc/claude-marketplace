@@ -52,6 +52,66 @@ op-item-new.sh templates/login.yaml
 | `op-cache-get.sh <ref>` | Read a secret from cache. Auto-refreshes on miss. |
 | `op-cache-clear.sh [vault...]` | Clear the cache (all or specific vaults). |
 | `op-item-new.sh <template.yaml>` | Create a new 1Password item from a YAML template. |
+| `enrich-secret.py <path> '<json>'` | Add descriptive metadata **fields** to an OpenBao/Vault KV-v2 secret (see below). |
+| `bao-kv.py <list\|tree\|get\|put\|rm>` | Generic CRUD for an OpenBao/Vault KV-v2 store over an AppRole (see below). |
+
+## Secret metadata convention (OpenBao / Vault KV v2)
+
+If you mirror your KV store into another vault (e.g. 1Password) for break-glass / autofill, the
+mirror copies **data fields** — not the KV `custom_metadata`. So any metadata you want to *see* in
+the mirror (what a secret is, what consumes it) must be a data field, not custom_metadata.
+
+`enrich-secret.py` adds two descriptive fields to a secret so every item becomes self-describing:
+
+- **`kind`** — a short slug. Suggested vocabulary: `camera`, `vm-root-credential`, `api-token`,
+  `oauth-token`, `tunnel-token`, `ssh-key`, `deploy-key`, `encryption-key`, `disk-passphrase`,
+  `backup-key`, `database-credential`, `service-admin`, `registry-credential`, `ci-token`,
+  `mcp-credential`, `mailbox-credential`, `remote-desktop-credential`, `service-account-token`,
+  `notification-token`, `launch-account`.
+- **`description`** — one clear sentence: what it is, what it protects, what consumes it, where.
+
+```bash
+export BAO_ADDR=https://vault.example.com     # or VAULT_ADDR
+enrich-secret.py myapp/db '{"kind":"database-credential","description":"prod Postgres for the billing app on vm-04, consumed by the API container"}'
+```
+
+**It is safe to hand to a sub-agent on production secrets.** By construction it:
+- refuses any field name that looks secret-ish (`password`/`token`/`credential`/`key`/…) — it can
+  *never* add or overwrite a credential;
+- only writes whitelisted descriptive keys (`kind`, `description`, `location`, `consumer`, `purpose`,
+  `category`, `owner`, `environment`, `criticality`, `notes_extra`);
+- merges (never drops an existing field) and **verifies by read-back** — any mismatch aborts
+  non-zero and leaves the secret untouched.
+
+Auth is an AppRole read from an age-encrypted file (headless, no biometric): `OP_APPROLE_FILE`
+(default `~/.config/openbao/approle.age`), `OP_AGE_IDENTITY` (default `~/.config/sops/age/keys.txt`),
+`OP_APPROLE_ROLE` (default `ansible-controller`), `BAO_MOUNT` (default `secret`),
+`BAO_SKIP_VERIFY=1` for a self-signed KV endpoint.
+
+## bao-kv — generic KV-v2 CRUD
+
+`bao-kv.py` is a headless, sub-agent-safe stand-in for the `bao`/`vault` CLI for everyday KV ops. It
+uses the **same AppRole auth and env vars as `enrich-secret.py`** (above) — no interactive login, and
+no token ever on a command line.
+
+```bash
+export BAO_ADDR=https://vault.example.com     # or VAULT_ADDR
+bao-kv.py list [prefix]              # keys directly under prefix (dirs end with /)
+bao-kv.py tree [prefix]              # whole subtree, indented
+bao-kv.py get  myapp/db              # all fields as JSON
+bao-kv.py get  myapp/db password     # one field's raw value (for scripts)
+bao-kv.py put  myapp/db host=db-04 port=5432        # MERGE fields (preserves the rest)
+bao-kv.py put  myapp/tls cert=@server.pem key=-     # value from a file, or from STDIN (multiline-safe)
+bao-kv.py put  myapp/db host=db-05 --replace        # write EXACTLY these fields, drop the rest
+bao-kv.py rm   myapp/old                            # soft-delete the latest version
+bao-kv.py rm   myapp/old --destroy-all              # permanently destroy all versions + metadata
+```
+
+Unlike `enrich-secret.py` (which refuses to touch credential fields), `bao-kv put` is the **full CRUD
+tool** — it can write any field, including secret values. Every write **verifies by read-back** and
+exits non-zero on any mismatch. `put` defaults to a merge; `--replace` writes exactly the given set.
+Value sources for `put`: `k=v` literal, `k=@file`, or `k=-` (one field from STDIN — the way to store a
+PEM/multiline value without a shell mangling its newlines).
 
 ## Reference format
 
