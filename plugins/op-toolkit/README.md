@@ -1,6 +1,6 @@
 # op-toolkit
 
-Full 1Password CLI toolkit for Claude Code: bulk-cache vaults so biometric prompts hit once per session, read secrets via `op://` references, and create new items from YAML templates.
+Full 1Password CLI toolkit for Claude Code: bulk-cache vaults so biometric prompts hit once per session, read secrets via `op://` references, and create/edit/delete items (fields and file attachments) from YAML templates.
 
 ## Why
 
@@ -25,7 +25,7 @@ Drop `--fields` or it will abort on any item missing that field.
 /plugin install op-toolkit@tanguc
 ```
 
-Requires: `op` 2.x, `jq`, `yq` (for `op-item-new.sh`).
+Requires: `op` 2.x, `jq`, `yq` (for `op-item-new.sh` / `op-item-edit.sh`).
 
 ## Quickstart
 
@@ -51,7 +51,9 @@ op-item-new.sh templates/login.yaml
 | `op-bulk-load.sh [vault...]` | Fetch full vault(s) into cache. One biometric prompt per vault. |
 | `op-cache-get.sh <ref>` | Read a secret from cache. Auto-refreshes on miss. |
 | `op-cache-clear.sh [vault...]` | Clear the cache (all or specific vaults). |
-| `op-item-new.sh <template.yaml>` | Create a new 1Password item from a YAML template. |
+| `op-item-new.sh <template.yaml>` | Create a new item from a YAML template (fields + attachments). |
+| `op-item-edit.sh <changes.yaml>` | Edit an existing item: update fields, attach files, delete fields/attachments. |
+| `op-item-rm.sh <id-or-title> --vault V` | Delete an item — archive by default, `--hard` for permanent. |
 | `enrich-secret.py <path> '<json>'` | Add descriptive metadata **fields** to an OpenBao/Vault KV-v2 secret (see below). |
 | `bao-kv.py <list\|tree\|get\|put\|rm>` | Generic CRUD for an OpenBao/Vault KV-v2 store over an AppRole (see below). |
 
@@ -143,32 +145,45 @@ PASS=$(op-cache-get.sh --alias PVE_PASS)
 
 The alias file should be `chmod 600`.
 
-## Creating items with YAML templates
+## Creating, editing, deleting items
 
-`op-item-new.sh` reads a YAML template and creates the item via `op item create`. Example template (`templates/login.yaml`):
+`op-item-new.sh` reads a YAML template and creates the item via `op item create`. Grouped fields go under `sections:` (concealed automatically when the field name looks like `password`/`token`/`secret`/`key`); file attachments go under `files:`.
 
 ```yaml
 category: login
 vault: Infrastructure
 title: My Service - Production
 username: admin
-password: "{{ generate | length=32 }}"
+password: generate            # or a literal value
 url: https://example.com
 notes: |
-  Created via op-toolkit template.
-  Rotate every 90 days.
-fields:
-  - label: API Key
-    type: concealed
-    value: ""
+  Purpose: ... Rotation: every 90 days. Related: ...
+sections:
+  API:
+    API Key: ""
+files:                        # ~ is expanded, the file must exist
+  "config.ovpn": ~/vpn/config.ovpn
+  "Certs.CA": ~/vpn/ca.crt    # a dot in the label = op section.field
 ```
 
-Validation rules:
-- `title` must be 10+ characters
-- `notes` must be prose, not structured data
-- `category` must be a valid 1Password category (`login`, `server`, `api-credential`, etc.)
+Validation: `title` 10+ chars, `notes` required prose, `category` must be valid. Pass `--dry-run` to print the resolved command (secrets redacted) without touching 1Password.
 
-Pass `--dry-run` to print the resolved template without creating anything.
+`op-item-edit.sh` edits an existing item with the same YAML shape — everything optional except `item` + `vault`. Only keys present are applied; `notes` replaces notesPlain wholesale. A `delete:` list removes fields or attachments by reference:
+
+```yaml
+item: opyian7xhf2bt5u44wlglwnlry   # id or exact title (or pass --item)
+vault: Private
+sections:
+  Setup:
+    folder: ~/app
+files:
+  "config.ovpn": ~/vpn/config.ovpn
+delete:
+  - "old-attachment"
+  - "Section.field"
+```
+
+`op-item-rm.sh "Title" --vault V` deletes an item — archived (recoverable) by default, `--hard` to destroy permanently. All three refresh the vault cache on success and support `--dry-run`.
 
 See `templates/` for more examples.
 
