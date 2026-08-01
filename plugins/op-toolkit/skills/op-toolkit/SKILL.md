@@ -11,14 +11,16 @@ Bulk-fetch 1Password vault(s) once per session, cache to `/tmp`, then read field
 
 ## The rule
 
-**Never call `op item get`, `op read`, or any direct `op` fetch inline.** Always route through the bundled scripts (on `PATH` when the plugin is enabled):
+**Never call `op` directly — not `op item get`/`read` for reads, and not `op item create`/`edit`/`delete` for writes.** Always route through the bundled scripts (on `PATH` when the plugin is enabled). Direct calls re-trigger biometric prompts and skip the cache refresh.
 
 ```bash
 # wrong
 PASS=$(op item get "Proxmox VE" --fields password --reveal)
+op item edit "My Item" 'config[file]=./x.conf'
 
 # right
 PASS=$(op-cache-get.sh 'op://Infrastructure/Proxmox VE/password')
+op-item-edit.sh changes.yaml
 ```
 
 ## First-time setup
@@ -56,14 +58,49 @@ category: login          # required: login, server, api-credential, etc.
 vault: Infrastructure    # required
 title: My Service - Prod # required, min 10 chars
 username: admin
-password: ""
+password: ""             # or "generate" for a random one
 url: https://example.com
 notes: |                 # required, prose only — not structured data
   Purpose and rotation notes here.
-fields:
-  - label: API Key
-    type: concealed
-    value: ""
+sections:                # grouped fields; concealed if name ~ password/token/secret/key
+  API:
+    API Key: ""
+files:                   # optional attachments; ~ is expanded, file must exist
+  "config.ovpn": ~/vpn/config.ovpn
+  "Certs.CA": ~/vpn/ca.crt   # a dot in the label = op section.field
+```
+
+## Editing items
+
+```bash
+op-item-edit.sh changes.yaml                       # target via 'item:'/'vault:' in yaml
+op-item-edit.sh changes.yaml --item <id> --vault V
+op-item-edit.sh changes.yaml --dry-run
+```
+
+Same YAML as create, but every key is optional except `item` + `vault`. Only the
+keys present are applied — `notes` REPLACES notesPlain wholesale. Add a `delete:`
+list to remove fields or attachments by reference:
+
+```yaml
+item: opyian7xhf2bt5u44wlglwnlry   # id or exact title
+vault: Private
+sections:
+  Setup:
+    folder: ~/app
+files:
+  "config.ovpn": ~/vpn/config.ovpn
+delete:
+  - "old-attachment"
+  - "Section.field"
+```
+
+## Deleting items
+
+```bash
+op-item-rm.sh "Item Title" --vault Private          # archive (recoverable)
+op-item-rm.sh <item-id> --vault Private --hard       # permanent
+op-item-rm.sh "Item Title" --vault Private --dry-run
 ```
 
 ## Commands
@@ -74,7 +111,9 @@ fields:
 | `op-bulk-load.sh [vault...]` | pre-warm cache (one biometric prompt per vault) |
 | `op-cache-get.sh <ref>` | read secret from cache, auto-refresh on miss |
 | `op-cache-clear.sh [vault...]` | clear all or specific vault caches |
-| `op-item-new.sh <template.yaml>` | create new item from YAML template |
+| `op-item-new.sh <template.yaml>` | create new item (fields + attachments) |
+| `op-item-edit.sh <changes.yaml>` | edit item: update fields, attach files, delete fields |
+| `op-item-rm.sh <id-or-title> --vault V` | delete item (archive by default, `--hard` for permanent) |
 
 ## Aliases
 

@@ -7,6 +7,11 @@
 #   op-item-new.sh template.yaml
 #   op-item-new.sh template.yaml --vault Personal
 #   op-item-new.sh template.yaml --dry-run
+#
+# templates may also carry file attachments:
+#   files:
+#     "WireGuard config": ~/.surfshark-vpn/wireguard.conf
+#     "Configs.OpenVPN":   ~/vpn/openvpn.ovpn   # a dot in the label = op section.field
 
 set -euo pipefail
 
@@ -195,6 +200,41 @@ if [ "$has_sections" = true ]; then
   done < <(build_section_args)
 fi
 
+# ---- build file attachment args ----
+# outputs lines like: "WireGuard config[file]=/Users/.../wireguard.conf"
+# a dot in the label makes op treat it as section.field (that's a feature, not a bug)
+expand_tilde() {
+  case "$1" in
+    "~") printf '%s' "$HOME" ;;
+    "~/"*) printf '%s/%s' "$HOME" "${1#\~/}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+build_file_args() {
+  local label path
+  while IFS= read -r label; do
+    [ -z "$label" ] || [ "$label" = "null" ] && continue
+    path=$(normalize "$(yq_get ".files[\"$label\"]")")
+    [ -z "$path" ] && continue
+    path=$(expand_tilde "$path")
+    [ -f "$path" ] || { echo "error: attachment file not found for '$label': $path" >&2; exit 1; }
+    printf '%s[file]=%s\n' "$label" "$path"
+  done < <(yq_get '.files | keys | .[]')
+}
+
+has_files=false
+if yq_get '.files | keys | length' 2>/dev/null | grep -qE '^[1-9]'; then
+  has_files=true
+fi
+
+FILE_ARGS=()
+if [ "$has_files" = true ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] && FILE_ARGS+=("$line")
+  done < <(build_file_args)
+fi
+
 # ---- build op item create command ----
 CMD=(op item create
   --category "$CATEGORY"
@@ -216,6 +256,12 @@ fi
 # bash 3.2 + set -u: expand empty array safely via ${var+...}
 if [ ${#SECTION_ARGS[@]} -gt 0 ]; then
   for arg in "${SECTION_ARGS[@]}"; do
+    CMD+=("$arg")
+  done
+fi
+
+if [ ${#FILE_ARGS[@]} -gt 0 ]; then
+  for arg in "${FILE_ARGS[@]}"; do
     CMD+=("$arg")
   done
 fi
