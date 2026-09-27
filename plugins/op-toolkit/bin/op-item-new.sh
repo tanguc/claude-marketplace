@@ -289,7 +289,7 @@ fi
 
 # ---- execute ----
 echo "creating item '$TITLE' in vault '$VAULT'..." >&2
-result=$(op item create "${CMD[@]}" --format=json 2>&1) || {
+result=$("${CMD[@]}" --format=json 2>&1) || {
   echo "error: op item create failed:" >&2
   echo "$result" >&2
   exit 1
