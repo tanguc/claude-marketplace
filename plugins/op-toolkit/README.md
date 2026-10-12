@@ -6,7 +6,7 @@ Full 1Password CLI toolkit for Claude Code: bulk-cache vaults so biometric promp
 
 Every call to `op item get` triggers an auth prompt — either a Touch ID dialog or a desktop CLI authorization dialog (via `Settings → Developer → Integrate with 1Password CLI`). Both expire after 10 minutes of inactivity. In an agent loop that needs 5 secrets, that is 5 interruptions.
 
-The cache is a JSON file in `/tmp`. It is unaffected by idle timeouts because `op` is not involved in reads after the initial warm. One prompt per vault, per session. Every subsequent lookup is a local `jq` read.
+The cache is a JSON file in `/tmp`. Cached field reads don't call `op` after the initial warm. One prompt per vault, per session. Attachment content is not cached: an explicit `--file-output` download calls `op` inside the toolkit and may require another authorization prompt.
 
 ## The trick
 
@@ -49,7 +49,8 @@ op-item-new.sh templates/login.yaml
 |--------|---------|
 | `op-toolkit-init.sh` | One-time setup: pick vaults to cache, write config |
 | `op-bulk-load.sh [vault...]` | Fetch full vault(s) into cache. One biometric prompt per vault. |
-| `op-cache-get.sh <ref>` | Read a secret from cache. Auto-refreshes on miss. |
+| `op-cache-get.sh <ref>` | Read a field from cache. Auto-refreshes on miss. |
+| `op-cache-get.sh --file-output OUTPUT <ref>` | Download an attachment to a new private file using warmed metadata. |
 | `op-cache-clear.sh [vault...]` | Clear the cache (all or specific vaults). |
 | `op-item-new.sh <template.yaml>` | Create a new item from a YAML template (fields + attachments). |
 | `op-item-edit.sh <changes.yaml>` | Edit an existing item: update fields, attach files, delete fields/attachments. |
@@ -117,7 +118,48 @@ PEM/multiline value without a shell mangling its newlines).
 
 ## Reference format
 
-`op://Vault/Item/field` — matches 1Password's own `op read` URI scheme.
+`op://Vault/Item/field` matches 1Password's own `op read` URI scheme.
+
+## Downloading attachments
+
+Use the reader's file mode, not a direct `op read` call:
+
+```bash
+op-bulk-load.sh 'Example Vault'
+mkdir -p "$HOME/.config/example"
+chmod 700 "$HOME/.config/example"
+op-cache-get.sh --file-output "$HOME/.config/example/config.json" \
+  'op://Example Vault/Service Config/config.json'
+```
+
+In this mode the last reference component is a file name or file ID, not a field label.
+The item can be an exact title or ID. The warmed cache must identify exactly one item and
+one attachment in its `.files` metadata, with valid vault, item and file IDs. The toolkit
+uses those IDs for one native `op read` invocation. Missing or ambiguous metadata fails
+without refreshing or downloading; warm the vault explicitly if the metadata is stale.
+`--alias`, `--refresh` and `--no-refresh` cannot be combined with `--file-output`.
+
+The output must not exist, even as a dangling symlink. Its parent must already exist,
+belong to the current user and not be group/world-writable. Symlinks anywhere in the
+output directory chain and `..` path components are rejected. Ancestors must belong to
+root or the current user and not be group/world-writable, except root-owned sticky
+ancestors such as the system temporary directory. BSD ACLs with any `allow` entry and
+GNU extended ACL markers are rejected; deny-only BSD ACLs are accepted.
+On macOS `/tmp` is a symlink: use its physical path (`/private/tmp`) or obtain a physical
+temporary path with `pwd -P`.
+
+The download is staged in a private directory beside the output, then published with
+native `link`, which atomically refuses any existing destination. No partial output is
+published. The resulting file is mode `0600`; empty downloads fail. Attachment bytes
+never go to stdout or into shell variables/arguments. Native stdout/stderr is discarded,
+so failures report a generic error rather than CLI diagnostics. Staging is removed on
+normal exit, failure, HUP, INT and TERM. SIGKILL or a crash can leave a private staging
+directory that needs removal. The destination filesystem must support hard links, and
+the native `link` command must be on `PATH` (macOS and GNU coreutils provide it).
+
+Downloaded files are not part of the cache. `op-cache-clear.sh` does not remove them;
+remove them yourself when no longer needed. These checks protect against other local
+users, not root or a process running as the same user, which can already read `0600` files.
 
 ## Auto-refresh on miss
 
@@ -210,17 +252,30 @@ Cleared on reboot. Override with `OP_TOOLKIT_CACHE_DIR`.
 
 - Cache dir is `chmod 700`, files are `chmod 600`, user-only
 - Secrets are plaintext JSON on disk in `/tmp`
-- Scripts never echo secret values to stdout except the final lookup result
+- Field reads return the requested value on stdout; attachment downloads never emit content
+- Attachment outputs are new `0600` files; native diagnostics are suppressed
 - Alias file: your responsibility to keep at `chmod 600`
 
 If plaintext-on-disk is unacceptable for your threat model, use `op` directly and accept the prompts.
 
 ## Limits
 
-- **Document** category items return metadata only; file content requires `op document get`
-- **File attachments** on regular items are not downloaded; metadata only
+- **Document** category primary content is not downloaded by this reader; it only handles `.files` attachment metadata
+- **File attachments** remain metadata-only in the bulk cache; use `--file-output` to download content explicitly
 - **TOTP** fields return the OTP URI (source of truth), not the live 6-digit code — use `op item get --otp` for live codes
 - Item titles containing `/` break the `op://Vault/Item/field` parser (1Password's own limitation)
+
+## Tests
+
+Run from the repository root:
+
+```bash
+bash plugins/op-toolkit/tests/test-op-cache-get.sh
+```
+
+The tests use an isolated home/cache and a fake `op` on `PATH`. No real vault, network or
+1Password session is used. They cover field-read compatibility, binary downloads,
+permissions, ambiguous metadata, unsafe paths, failed reads, cleanup and destination races.
 
 ## License
 

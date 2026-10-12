@@ -7,6 +7,7 @@
 #   op-cache-get.sh --alias PVE_PASS
 #   op-cache-get.sh --refresh 'op://Vault/Item/field'      # force refresh first
 #   op-cache-get.sh --no-refresh 'op://Vault/Item/field'   # disable auto-refresh
+#   op-cache-get.sh --file-output OUTPUT 'op://Vault/Item/FileName'
 #
 # behavior:
 #   1. if vault cache file does not exist, bulk-load it (one prompt)
@@ -42,6 +43,8 @@ usage: op-cache-get.sh <ref> | --alias <name> | --refresh <ref> | --no-refresh <
   --alias NAME:  resolve via \$OP_TOOLKIT_ALIAS_FILE (default: ~/.config/op-toolkit/aliases.env)
   --refresh:     force vault refresh before lookup
   --no-refresh:  disable auto-refresh-on-miss
+  --file-output OUTPUT op://Vault/Item/FileName:
+                 download an attachment to a new 0600 file (requires warm cache)
 EOF
   exit 1
 }
@@ -85,12 +88,101 @@ lookup() {
   ' "$CACHE_FILE"
 }
 
+# only root and this user may change the output's directory chain
+check_output_dir() {
+  local dir="$1" attrs owner mode bits uid listing perms
+  uid=$(id -u)
+  while :; do
+    [ -d "$dir" ] && [ ! -L "$dir" ] || return 1
+    # mode bits don't include ACL grants; BSD lists them, GNU marks them with +
+    listing=$(LC_ALL=C ls -lde "$dir" 2>/dev/null) \
+      || listing=$(LC_ALL=C ls -ld "$dir" 2>/dev/null) || return 1
+    if [[ "$listing" = *$'\n'* ]]; then
+      [[ "$listing" != *' allow '* ]] || return 1
+    else
+      read -r perms _ <<< "$listing"
+      [[ "$perms" != *+* ]] || return 1
+    fi
+    attrs=$(stat -f '%u %Lp' "$dir" 2>/dev/null) \
+      || attrs=$(stat -c '%u %a' "$dir" 2>/dev/null) || return 1
+    read -r owner mode <<< "$attrs"
+    [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    [ "$owner" = "$uid" ] || [ "$owner" = 0 ] || return 1
+    bits=$((8#$mode))
+    if [ "$dir" = "$1" ]; then
+      [ "$owner" = "$uid" ] && [ $((bits & 0022)) -eq 0 ] || return 1
+    elif [ $((bits & 0022)) -ne 0 ]; then
+      # a root-owned sticky ancestor cannot unlink another user's directory
+      [ "$owner" = 0 ] && [ $((bits & 01000)) -ne 0 ] || return 1
+    fi
+    [ "$dir" = / ] && return 0
+    dir=$(dirname -- "$dir")
+  done
+}
+
+download_file() (
+  fail() { printf '%s\n' "$1" >&2; exit 1; }
+  command -v op >/dev/null || fail 'op CLI not found in PATH'
+  command -v link >/dev/null || fail 'link not found in PATH'
+  [ -f "$CACHE_FILE" ] || fail 'attachment metadata missing; warm the vault cache first'
+
+  # resolve once, with no cached values or native diagnostics reaching the terminal
+  ids=$(jq -er --arg vault "$VAULT" --arg item "$ITEM" --arg file "$FIELD" '
+    def valid_id: type == "string" and test("^[a-z0-9]{26}$");
+    [.[] | select(.title == $item or .id == $item)]
+    | if length == 1 then .[0] else error("item not unique") end
+    | select(.vault.name == $vault or .vault.id == $vault)
+    | . as $item
+    | [.files[]? | select(.name == $file or .id == $file)]
+    | if length == 1 then .[0] else error("file not unique") end
+    | [$item.vault.id, $item.id, .id]
+    | if all(.[]; valid_id) then join("/") else error("invalid ids") end
+  ' "$CACHE_FILE" 2>/dev/null) || fail 'attachment metadata missing, ambiguous or invalid'
+
+  [[ ! "$FILE_OUTPUT" =~ [[:cntrl:]] ]] || fail 'unsafe output path'
+  case "$FILE_OUTPUT" in
+    */|*/../*|../*|*/..|..|.) fail 'unsafe output path' ;;
+    /*) output="$FILE_OUTPUT" ;;
+    *) output="$PWD/$FILE_OUTPUT" ;;
+  esac
+  [[ ! "$output" =~ [[:cntrl:]] ]] || fail 'unsafe output path'
+  parent=$(dirname -- "$output")
+  name=$(basename -- "$output")
+  check_output_dir "$parent" || fail 'unsafe output directory'
+  # pin the checked parent so later pathname changes cannot redirect placement
+  cd -P -- "$parent" || fail 'cannot open output directory'
+  [ ! -e "./$name" ] && [ ! -L "./$name" ] || fail 'output already exists'
+
+  umask 077
+  stage=$(mktemp -d './.op-attachment.XXXXXX') || fail 'cannot create private staging directory'
+  trap 'rm -rf -- "$stage" || { printf "cannot remove private staging directory\n" >&2; exit 1; }' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  (set -C; : > "$stage/content") || fail 'cannot create private staging file'
+  if ! op read "op://$ids" --out-file "$stage/content" --file-mode 0600 --force >/dev/null 2>&1; then
+    fail 'attachment read failed'
+  fi
+  [ ! -L "$stage/content" ] && [ -f "$stage/content" ] && [ -s "$stage/content" ] \
+    || fail 'attachment empty or not a regular file'
+  chmod 600 "$stage/content" || fail 'cannot set private file permissions'
+  # link calls link(2), unlike ln/mv it never treats a raced destination as a directory
+  link "$stage/content" "./$name" 2>/dev/null || fail 'cannot place attachment; output exists or hard links unavailable'
+  printf 'attachment downloaded to private file\n' >&2
+)
+
 REFRESH_MODE=auto
 REF=""
+FILE_OUTPUT=""
 
 [ $# -eq 0 ] && usage
 
 case "$1" in
+  --file-output)
+    [ $# -eq 3 ] && [ -n "$2" ] || usage
+    FILE_OUTPUT="$2"
+    REF="$3"
+    ;;
   --alias)
     [ $# -eq 2 ] || usage
     REF=$(resolve_alias "$2") || exit 1
@@ -114,6 +206,11 @@ parse_ref "$REF" || exit 1
 
 safe=$(printf '%s' "$VAULT" | tr -c '[:alnum:]._-' '_')
 CACHE_FILE="$CACHE_DIR/$safe.json"
+
+if [ -n "$FILE_OUTPUT" ]; then
+  download_file
+  exit $?
+fi
 
 # bootstrap if missing, or force refresh
 if [ "$REFRESH_MODE" = "force" ] || [ ! -f "$CACHE_FILE" ]; then

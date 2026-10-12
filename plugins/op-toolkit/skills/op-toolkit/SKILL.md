@@ -44,6 +44,41 @@ Auto-refresh-on-miss is on by default. When a key is not found and the cache is 
 
 Disable: `--no-refresh`. Override debounce: `OP_TOOLKIT_REFRESH_DEBOUNCE=60`.
 
+## Downloading attachments
+
+Attachments are metadata-only in the bulk cache. For content, use the reader's explicit
+file mode rather than calling `op` directly:
+
+```bash
+op-bulk-load.sh 'Example Vault'
+mkdir -p "$HOME/.config/example"
+chmod 700 "$HOME/.config/example"
+op-cache-get.sh --file-output "$HOME/.config/example/config.json" \
+  'op://Example Vault/Service Config/config.json'
+```
+
+The item is an exact title or ID; the final component is a file name or ID, not a field
+label. Exactly one item and one attachment must match the warmed `.files` metadata.
+The toolkit resolves stable vault/item/file IDs and calls native `op read` internally.
+This may prompt for authorization. Missing, ambiguous or invalid metadata fails without
+an automatic refresh; warm the vault explicitly first. No alias/refresh flags can be
+combined with `--file-output`.
+
+The output must be new. Its existing parent must belong to the current user and not be
+group/world-writable. Symlinks anywhere in the output directory chain and `..` components
+are rejected. Ancestors must belong to root or the current user and not be writable by
+others, except root-owned sticky ancestors. BSD ACL `allow` entries and GNU extended ACL
+markers are rejected; deny-only BSD ACLs are accepted. Use physical temporary paths on macOS:
+`/tmp` is a symlink to `/private/tmp`.
+
+Content is staged privately and atomically published as a `0600` file with native `link`.
+An existing destination, including one created during the download, is never overwritten
+or followed. Empty downloads fail. Bytes never go to stdout or shell variables/arguments;
+native stdout/stderr is suppressed. Failure and HUP/INT/TERM remove staging. SIGKILL or a
+crash can leave private staging behind. The filesystem must support hard links and
+`link` must be on `PATH`. These checks don't protect against root or same-user processes.
+Downloaded files are not cache entries and are not removed by `op-cache-clear.sh`.
+
 ## Creating items
 
 ```bash
@@ -109,7 +144,8 @@ op-item-rm.sh "Item Title" --vault Private --dry-run
 |--------|---------|
 | `op-toolkit-init.sh` | one-time setup: pick vaults, write config |
 | `op-bulk-load.sh [vault...]` | pre-warm cache (one biometric prompt per vault) |
-| `op-cache-get.sh <ref>` | read secret from cache, auto-refresh on miss |
+| `op-cache-get.sh <ref>` | read field from cache, auto-refresh on miss |
+| `op-cache-get.sh --file-output OUTPUT <ref>` | download attachment to a new private file using warmed metadata |
 | `op-cache-clear.sh [vault...]` | clear all or specific vault caches |
 | `op-item-new.sh <template.yaml>` | create new item (fields + attachments) |
 | `op-item-edit.sh <changes.yaml>` | edit item: update fields, attach files, delete fields |
@@ -132,8 +168,8 @@ op-item-rm.sh "Item Title" --vault Private --dry-run
 
 ## Limits
 
-- Document category items: metadata only, no file content
-- File attachments: not downloaded, metadata only
+- Document category primary content: unsupported by this reader, which only uses `.files` attachment metadata
+- File attachments: metadata-only cache; download explicitly with `--file-output`
 - TOTP: returns OTP URI, not live 6-digit code
 
 ## Requirements
@@ -142,3 +178,4 @@ op-item-rm.sh "Item Title" --vault Private --dry-run
 - `jq`
 - `yq` (for `op-item-new.sh` only)
 - Bash 3.2+ (scripts are compatible with the default macOS bash)
+- Native `link` (macOS or GNU coreutils, for `--file-output` only)
