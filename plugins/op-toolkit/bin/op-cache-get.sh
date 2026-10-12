@@ -120,7 +120,7 @@ check_output_dir() {
   done
 }
 
-download_file() (
+download_file() {
   fail() { printf '%s\n' "$1" >&2; exit 1; }
   command -v op >/dev/null || fail 'op CLI not found in PATH'
   command -v link >/dev/null || fail 'link not found in PATH'
@@ -169,7 +169,7 @@ download_file() (
   # link calls link(2), unlike ln/mv it never treats a raced destination as a directory
   link "$stage/content" "./$name" 2>/dev/null || fail 'cannot place attachment; output exists or hard links unavailable'
   printf 'attachment downloaded to private file\n' >&2
-)
+}
 
 REFRESH_MODE=auto
 REF=""

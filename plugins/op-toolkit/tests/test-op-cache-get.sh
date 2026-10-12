@@ -52,6 +52,8 @@ case "$FAKE_MODE" in
   symlink-content) rm "$4"; ln -s "$RACE_TARGET" "$4" ;;
   directory-content) rm "$4"; mkdir "$4" ;;
   signal) kill -TERM "$PPID" ;;
+  signal-hup) kill -HUP "$PPID" ;;
+  signal-int) kill -INT "$PPID" ;;
   success) ;;
   *) exit 96 ;;
 esac
@@ -242,7 +244,7 @@ for output in "$ROOT/out/missing/result.bin" "$ROOT/out/../result.bin" "$ROOT/ou
   pass 'invalid or missing output directory is rejected'
 done
 
-for mode in fail empty signal symlink-content directory-content; do
+for mode in fail empty signal signal-hup signal-int symlink-content directory-content; do
   reset
   export FAKE_MODE="$mode" RACE_TARGET="$ROOT/existing.bin"
   if run_download; then fail "$mode native read accepted"; fi
